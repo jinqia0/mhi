@@ -7,13 +7,15 @@ from tqdm import tqdm
 # 禁用 transformers 的日志信息
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
+device = "cuda:7"
+
 # 加载模型和分词器
-model_path = "./Meta-Llama-3.1-8B-Instruct/"
+model_path = "./LLM/Llama-3.1-8B-Instruct/"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
-model = AutoModelForCausalLM.from_pretrained(model_path).to("cuda")
+model = AutoModelForCausalLM.from_pretrained(model_path).to(device)
 
 # 读取 CSV 文件
-csv_file = "./panda_10k_interaction_score.csv"  # 替换为你的文件路径
+csv_file = "./data/panda_100k.csv"  # 替换为你的文件路径
 df = pd.read_csv(csv_file)
 
 # Initialize the new column with None
@@ -35,7 +37,7 @@ for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing captions")
 
     # 格式化输入
     input_text = tokenizer.apply_chat_template(messages, tokenize=False)
-    inputs = tokenizer(input_text, return_tensors="pt").to("cuda")
+    inputs = tokenizer(input_text, return_tensors="pt").to(device)
 
     # 生成输出
     output = model.generate(
@@ -53,5 +55,6 @@ for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing captions")
     df.at[index, 'caption_interaction'] = result
 
 # 将结果保存回 CSV 文件
-df.to_csv(csv_file, index=False)
+csv_file_save = "./data/interaction_100k.csv"
+df.to_csv(csv_file_save, index=False)
 print(f"Results saved to {csv_file}")
