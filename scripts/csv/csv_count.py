@@ -1,15 +1,14 @@
 import pandas as pd
 
-# 读取包含判定结果的 CSV 文件
-csv_file = "./panda_10k_interaction_score.csv"  # 替换为你的文件路径
-df = pd.read_csv(csv_file)
+# 读取 CSV 文件
+df = pd.read_csv('./data/panda_10k_interaction_score.csv')  
 
-# 统计每个层级的 "Yes" 和 "No"
-statistics = {}
+# 统计满足某个条件的行数，例如筛选 "age" 大于 30 的行
+count_both = df[(df['has_interaction'] == 1) & (df['inHOI'] == 1)].shape[0]
+count_interaction = df[df['has_interaction'] == 1].shape[0]
+count_HOI = df[df['inHOI'] == 1].shape[0]
 
-yes_count = df['caption_interaction'].value_counts().get("Yes", 0)
-no_count = df['caption_interaction'].value_counts().get("No", 0)
 
-# 输出统计结果
-print(f"  Yes: {yes_count}")
-print(f"  No: {no_count}")
+print(f"count_both: {count_both}")
+print(f"count_interaction: {count_interaction}")
+print(f"count_HOI: {count_HOI}")
