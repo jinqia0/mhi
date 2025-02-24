@@ -7,7 +7,7 @@ from tqdm import tqdm
 # 禁用 transformers 的日志信息
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
-device = "cuda:7"
+device = "cuda:0"
 
 # 加载模型和分词器
 model_path = "./LLM/Llama-3.1-8B-Instruct/"
