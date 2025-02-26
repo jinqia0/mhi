@@ -1,14 +1,17 @@
 import pandas as pd
 
 # 读取 CSV 文件
-df = pd.read_csv('./data/panda_10k_interaction_score.csv')  
+df = pd.read_csv('./data/interaction_100k.csv')  
 
-# 统计满足某个条件的行数，例如筛选 "age" 大于 30 的行
-count_both = df[(df['has_interaction'] == 1) & (df['inHOI'] == 1)].shape[0]
-count_interaction = df[df['has_interaction'] == 1].shape[0]
-count_HOI = df[df['inHOI'] == 1].shape[0]
+count_y = df['caption_interaction'] == 'Yes'
+count_n = df['caption_interaction'] == 'No'
 
+# 打印不同条件的行数
+print(f"yes: {count_y.sum()}")
+print(f"no: {count_n.sum()}")
+print(f"既非yes也非no: {(~count_y & ~count_n).sum()}")
+print(f"总行数: {len(df)}")
 
-print(f"count_both: {count_both}")
-print(f"count_interaction: {count_interaction}")
-print(f"count_HOI: {count_HOI}")
+# 打印既非yes也非no的行下标
+print(f"既非yes也非no的行下标: {df[~count_y & ~count_n].index.to_list()}")
+
