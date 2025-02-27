@@ -7,3 +7,6 @@
 [submodule "Open-Sora"]
 	path = Open-Sora
 	url = https://github.com/hpcaitech/Open-Sora.git
+[submodule "MotionLLM"]
+	path = MotionLLM
+	url = https://github.com/IDEA-Research/MotionLLM.git
