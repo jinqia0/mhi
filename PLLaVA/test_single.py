@@ -1,18 +1,7 @@
-import sys
-import os
-from pathlib import Path
-
-datasets_dir = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/Open-Sora/opensora/datasets"
-sys.path.append(datasets_dir)
-from read_video import read_video_av
-sys.path.remove(datasets_dir)
-
-import logging
 import numpy as np
+import logging
 import pandas as pd
 import torch
-import torchvision
-import transformers
 from PIL import Image
 from tasks.eval.eval_utils import Conversation
 from tasks.eval.model_utils import load_pllava
@@ -21,6 +10,14 @@ from tqdm import tqdm
 from transformers.feature_extraction_utils import BatchFeature
 
 from caption_pllava import pllava_answer, get_index, load_video, collate_fn, parse_args, infer
+
+import sys
+import os
+
+datasets_dir = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/Open-Sora/opensora/datasets"
+sys.path.append(datasets_dir)
+from read_video import read_video_av
+sys.path.remove(datasets_dir)
 
 conv_template = Conversation(
     system="Please describe the content of this video in as much detail as possible. Please describe the content of the video and the changes that occur, in chronological order. \
@@ -41,7 +38,85 @@ logger.setLevel(logging.INFO)
 
 RESOLUTION = 672
 
-# 保持原有的pllava_answer、get_index、load_video、collate_fn函数不变
+def pllava_answer(
+    conv: Conversation,
+    model,
+    processor,
+    video_list,
+    do_sample=True,
+    max_new_tokens=200,
+    num_beams=1,
+    min_length=1,
+    top_p=0.9,
+    repetition_penalty=1.0,
+    length_penalty=1,
+    temperature=1.0,
+    print_res=False,
+):
+    # torch.cuda.empty_cache()
+    prompt = conv.get_prompt()
+    inputs_list = [processor(text=prompt, images=video, return_tensors="pt") for video in video_list]
+    inputs_batched = dict()  # add batch dimension by cat
+    for input_type in list(inputs_list[0].keys()):
+        inputs_batched[input_type] = torch.cat([inputs[input_type] for inputs in inputs_list])
+    inputs_batched = BatchFeature(inputs_batched, tensor_type="pt").to(model.device)
+
+    with torch.no_grad():
+        output_texts = model.generate(
+            **inputs_batched,
+            media_type="video",
+            do_sample=do_sample,
+            max_new_tokens=max_new_tokens,
+            num_beams=num_beams,
+            min_length=min_length,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            length_penalty=length_penalty,
+            temperature=temperature,
+        )
+        output_texts = processor.batch_decode(
+            output_texts, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+    for i in range(len(output_texts)):
+        if print_res:  # debug usage
+            print("### PROMPTING LM WITH: ", prompt)
+            print("### LM OUTPUT TEXT:  ", output_texts[i])
+        if conv.roles[-1] == "<|im_start|>assistant\n":
+            split_tag = "<|im_start|> assistant\n"
+        else:
+            split_tag = conv.roles[-1]
+        output_texts[i] = output_texts[i].split(split_tag)[-1]
+        ending = conv.sep if isinstance(conv.sep, str) else conv.sep[1]
+        output_texts[i] = output_texts[i].removesuffix(ending).strip()
+        output_texts[i] = output_texts[i].replace("\n", " ")
+        conv.messages[-1][1] = output_texts[i]
+    return output_texts, conv
+
+def get_index(num_frames, num_segments):
+    seg_size = float(num_frames - 1) / num_segments
+    start = int(seg_size / 2)
+    offsets = np.array([start + int(np.round(seg_size * idx)) for idx in range(num_segments)])
+    return offsets
+
+def load_video(video_path, num_frames, return_msg=False, resolution=336):
+    transforms = torchvision.transforms.Resize(size=resolution)
+    # vr = VideoReader(video_path, ctx=cpu(0), num_threads=1)
+    vframes, aframes, info = read_video_av(
+        video_path,
+        pts_unit="sec", 
+        output_format="THWC"
+    )
+    total_num_frames = len(vframes)
+    frame_indices = get_index(total_num_frames, num_frames)
+    images_group = list()
+    for frame_index in frame_indices:
+        img = Image.fromarray(vframes[frame_index].numpy())
+        images_group.append(transforms(img))
+    if return_msg:
+        exit('return_msg not implemented yet')
+    else:
+        return images_group
+
 
 class CSVDataset(Dataset):
     def __init__(self, csv_path, num_frames):
@@ -60,6 +135,15 @@ class CSVDataset(Dataset):
         except:
             return None
         return video
+    
+    def set_rank_and_world_size(self, rank, world_size):
+        self.rank = rank
+        self.world_size = world_size
+        self.data_per_gpu = len(self) // world_size
+        start_index = rank * self.data_per_gpu
+        end_index = (rank + 1) * self.data_per_gpu if rank != world_size - 1 else len(self)
+        self.data_list = self.data_list[start_index:end_index]
+
 
 
 def load_model_and_dataset(args, pooling_shape=(16, 12, 12)):
@@ -72,10 +156,6 @@ def load_model_and_dataset(args, pooling_shape=(16, 12, 12)):
         lora_alpha=args.lora_alpha,
         pooling_shape=pooling_shape,
     )
-    print("START HERE*****************************************************************")
-    print(model.config)
-    print(model)
-    print("END HERE*******************************************************************")
     logger.info("done loading llava")
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
