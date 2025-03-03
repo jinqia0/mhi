@@ -4,8 +4,8 @@ import os
 import random
 
 # === 配置 ===
-csv_path = "./panda_10k_interaction_score.csv"  # CSV 文件路径
-destination_folder = "./sampled_caption_yes_num_persons_yes_bbox_no"  # 目标文件夹
+csv_path = "data/internvid/internvid_00_1k.csv"  # CSV 文件路径
+destination_folder = "./samples"  # 目标文件夹
 sample_size = 100  # 需要抽样的视频数量
 
 # 读取 CSV
@@ -13,9 +13,7 @@ df = pd.read_csv(csv_path)
 
 # 筛选符合条件的视频
 filtered_videos = df[
-    (df["caption_interaction"] == "Yes") &  # Caption 认为是多人
-    (df["num_persons"] >= 2) &             # 标准1：多人
-    (df["bbox_overlap"] == 0)              # 标准2：无重叠
+    (df["caption_interaction"] == "Yes")
 ]
 
 # 如果筛选结果少于 sample_size，则使用全部数据
@@ -27,7 +25,7 @@ os.makedirs(destination_folder, exist_ok=True)
 
 # 复制视频到目标文件夹
 for _, row in sampled_videos.iterrows():
-    video_path = row["path"]  # 获取视频路径
+    video_path = os.path.join('Datasets/videos', row["path"])  # 获取视频路径
     if os.path.exists(video_path):  # 确保文件存在
         shutil.copy(video_path, destination_folder)
     else:

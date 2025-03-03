@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run PLLaVA Caption Script",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/PLLaVA/test_single.py",
+            "args": [
+                "--pretrained_model_name_or_path", "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/PLLaVA/MODELS/pllava-13b",
+                "--csv_path", "../data/internvid/internvid_00_100.csv",
+                "--num_frames", "8",
+                "--batch_size", "8",
+                // "--pooling_shape", "16-12-12"
+            ],
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/envs/pllava/bin/python"
+            },
+            "cwd": "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/PLLaVA"
+        }
+    ]
+}

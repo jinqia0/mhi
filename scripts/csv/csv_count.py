@@ -1,7 +1,7 @@
 import pandas as pd
 
 # 读取 CSV 文件
-df = pd.read_csv('./data/interaction_100k.csv')  
+df = pd.read_csv('/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/data/panda/panda_10k_interaction_score.csv')  
 
 count_y = df['caption_interaction'] == 'Yes'
 count_n = df['caption_interaction'] == 'No'

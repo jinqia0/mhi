@@ -6,10 +6,10 @@ from safetensors import safe_open
 from peft import PeftModel
 from tasks.eval.eval_utils import Conversation
 from models.pllava import PllavaProcessor, PllavaForConditionalGeneration, PllavaConfig
-from accelerate import init_empty_weights, dispatch_model, infer_auto_device_map,load_checkpoint_in_model
+from accelerate import init_empty_weights, dispatch_model, infer_auto_device_map,load_checkpoint_in_model, load_checkpoint_and_dispatch
 from accelerate.utils import get_balanced_memory
 
-from transformers import StoppingCriteria
+from transformers import StoppingCriteria, AutoConfig
 class KeywordsStoppingCriteria(StoppingCriteria):
     def __init__(self, keywords, tokenizer, input_ids):
         self.keywords = keywords
@@ -36,91 +36,93 @@ class KeywordsStoppingCriteria(StoppingCriteria):
             return flag
 
 
-def load_pllava(repo_id, num_frames, use_lora=False, weight_dir=None, lora_alpha=32, use_multi_gpus=False, pooling_shape=(16,12,12)):
+def load_pllava(repo_id, num_frames, use_lora=False, weight_dir=None, lora_alpha=32, 
+               use_multi_gpus=False, pooling_shape=(16,12,12), device_map="auto"):
+    # ========== 动态显存计算 ==========
+    def calculate_video_mem_per_gpu():
+        frame_mem = 672 * 672 * 3 * 4  # 单帧内存（float32）
+        return (frame_mem * num_frames * 8) / 1e9  # 预估每卡视频处理内存（GB）
+
+    video_mem_per_gpu = calculate_video_mem_per_gpu()
+    available_mem = [torch.cuda.get_device_properties(i).total_memory / 1e9 
+                    for i in range(torch.cuda.device_count())]
+    max_memory = {i: f"{min(80, avail * 0.95 - video_mem_per_gpu):.0f}GB"  # A800预留5%显存
+                 for i, avail in enumerate(available_mem)}
+
+    # ========== 模型配置 ==========
     kwargs = {
         'num_frames': num_frames,
+        'torch_dtype': torch.bfloat16,
+        'device_map': device_map if use_multi_gpus else None
     }
-    # print("===============>pooling_shape", pooling_shape)
+    
     if num_frames == 0:
-        kwargs.update(pooling_shape=(0,12,12)) # produce a bug if ever usen the pooling projector
-    config = PllavaConfig.from_pretrained(
+        kwargs.update(pooling_shape=(0,12,12))
+        
+    config = AutoConfig.from_pretrained(
         repo_id if not use_lora else weight_dir,
         pooling_shape=pooling_shape,
-        **kwargs,
+        **kwargs
     )
+
+    # ========== 空权重初始化+分布式加载 ==========
+    with init_empty_weights():
+        model = PllavaForConditionalGeneration(config)
     
-    with torch.no_grad():
-        model = PllavaForConditionalGeneration.from_pretrained(repo_id, config=config, torch_dtype=torch.bfloat16)
-        
+    model = load_checkpoint_and_dispatch(
+        model,
+        repo_id,
+        device_map=device_map,
+        max_memory=max_memory if use_multi_gpus else None,
+        no_split_module_classes=["LlamaDecoderLayer"],
+        dtype=torch.bfloat16
+    )
+
+    # ========== 处理器加载 ==========
     try:
         processor = PllavaProcessor.from_pretrained(repo_id)
     except Exception as e:
         processor = PllavaProcessor.from_pretrained('llava-hf/llava-1.5-7b-hf')
 
-    # config lora
+    # ========== 动态LoRA配置 ==========
     if use_lora and weight_dir is not None:
-        print("Use lora")
+        print("[LoRA] Initializing adapter...")
         peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM, inference_mode=False,  target_modules=["q_proj", "v_proj"],
-            r=128, lora_alpha=lora_alpha, lora_dropout=0.
+            task_type=TaskType.CAUSAL_LM,
+            inference_mode=False,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],  # 扩展目标层
+            r=128,
+            lora_alpha=lora_alpha,
+            lora_dropout=0.1,
+            fan_in_fan_out=True,  # 适配模型并行
+            modules_to_save=["embed_tokens", "lm_head"]  # 保持关键层完整
         )
-        print("Lora Scaling:", lora_alpha/128)
         model.language_model = get_peft_model(model.language_model, peft_config)
-        assert weight_dir is not None, "pass a folder to your lora weight"
-        print("Finish use lora")
-    
-    # load weights
+        print(f"[LoRA] Adapter initialized with alpha={lora_alpha}")
+
+    # ========== 分布式权重加载 ==========
     if weight_dir is not None:
-        state_dict = {}
-        save_fnames = os.listdir(weight_dir)
-        if "model.safetensors" in save_fnames:
-            use_full = False
-            for fn in save_fnames:
-                if fn.startswith('model-0'):
-                    use_full=True        
-                    break
-        else:
-            use_full= True
+        from accelerate.utils import load_checkpoint_in_model
+        print(f"[Loading] Distributed weights from {weight_dir}")
+        
+        load_checkpoint_in_model(
+            model,
+            checkpoint_location=weight_dir,
+            device_map=device_map,
+            offload_state_dict=True,
+            offload_buffers=True
+        )
 
-        if not use_full:
-            print("Loading weight from", weight_dir, "model.safetensors")
-            with safe_open(f"{weight_dir}/model.safetensors", framework="pt", device="cpu") as f:
-                for k in f.keys():
-                    state_dict[k] = f.get_tensor(k)
-        else:
-            print("Loading weight from", weight_dir)
-            for fn in save_fnames:
-                if fn.startswith('model-0'):
-                    with safe_open(f"{weight_dir}/{fn}", framework="pt", device="cpu") as f:
-                        for k in f.keys():
-                            state_dict[k] = f.get_tensor(k)
-            
-        if 'model' in state_dict.keys():
-            msg = model.load_state_dict(state_dict['model'], strict=False)
-        else:
-            msg = model.load_state_dict(state_dict, strict=False)
-        print(msg)
-    # dispatch model weight
+    # ========== 混合精度配置 ==========
+    model = model.to(torch.bfloat16)
+    for param in model.parameters():
+        param.requires_grad_(False)  # 冻结基础模型
+        
+    # ========== 多卡同步检查 ==========
     if use_multi_gpus:
-        max_memory = get_balanced_memory(
-            model,
-            max_memory=None,
-            no_split_module_classes=["LlamaDecoderLayer"],
-            dtype='bfloat16',
-            low_zero=False,
-        )
-
-        device_map = infer_auto_device_map(
-            model,
-            max_memory=max_memory,
-            no_split_module_classes=["LlamaDecoderLayer"],
-            dtype='bfloat16'
-        )
-
-        dispatch_model(model, device_map=device_map)
-        print(model.hf_device_map)
-
-    model = model.eval()
+        from accelerate.utils import check_device_map
+        check_device_map(model, device_map)
+        print(f"[Device Map] Model distributed across devices: {model.hf_device_map}")
 
     return model, processor
 
