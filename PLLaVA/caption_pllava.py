@@ -37,7 +37,10 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-RESOLUTION = 672  #
+RESOLUTION = 472  #
+
+torch.backends.cudnn.benchmark = True
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def pllava_answer(
@@ -46,7 +49,7 @@ def pllava_answer(
     processor,
     video_list,
     do_sample=True,
-    max_new_tokens=200,
+    max_new_tokens=500,
     num_beams=1,
     min_length=1,
     top_p=0.9,
@@ -55,7 +58,6 @@ def pllava_answer(
     temperature=1.0,
     print_res=False,
 ):
-    # torch.cuda.empty_cache()
     prompt = conv.get_prompt()
     inputs_list = [processor(text=prompt, images=video, return_tensors="pt") for video in video_list]
     inputs_batched = dict()  # add batch dimension by cat
@@ -92,6 +94,8 @@ def pllava_answer(
         output_texts[i] = output_texts[i].removesuffix(ending).strip()
         output_texts[i] = output_texts[i].replace("\n", " ")
         conv.messages[-1][1] = output_texts[i]
+    del inputs_batched
+    torch.cuda.empty_cache()
     return output_texts, conv
 
 
@@ -105,7 +109,7 @@ def get_index(num_frames, num_segments):
 def load_video(video_path, num_frames, return_msg=False, resolution=336):
     transforms = torchvision.transforms.Resize(size=resolution)
     # vr = VideoReader(video_path, ctx=cpu(0), num_threads=1)
-    vframes, aframes, info = read_video_av(
+    vframes, _, _ = read_video_av(
         video_path,
         pts_unit="sec", 
         output_format="THWC"
@@ -117,6 +121,7 @@ def load_video(video_path, num_frames, return_msg=False, resolution=336):
         img = Image.fromarray(vframes[frame_index].numpy())
         images_group.append(transforms(img))
         del img
+    del vframes
     if return_msg:
         exit('return_msg not implemented yet')
     else:
@@ -229,6 +234,7 @@ def load_model_and_dataset(
         lora_alpha=lora_alpha,
         pooling_shape=pooling_shape,
     )
+    model = model.half()
     logger.info("done loading llava")
 
     #  position embedding
@@ -259,7 +265,7 @@ def infer(
         model=model,
         processor=processor,
         video_list=video_list,
-        max_new_tokens=300, # 256,   500
+        max_new_tokens=500, # 256,   500
         do_sample=False,
         print_res=print_res,
     )
@@ -304,7 +310,7 @@ def run(rank, args, world_size, output_queue):
     logger.info("single test...")
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        num_workers=2,
+        num_workers=4,
         batch_size=args.batch_size,
         collate_fn=collate_fn,
         shuffle=False,
@@ -363,18 +369,13 @@ def main():
         logger.info("finished running")
         for p in processes:
             p.join()
-            p.terminate()  # 强制终止残留进程
-            p.close()
 
         results_list = list(itertools.chain.from_iterable(results_by_rank[i] for i in range(world_size)))
-        # results_list = list(itertools.chain([results_by_rank[i] for i in range(world_size)]))
-        # (data[key] for key in sorted_keys)
-        # results_list = [item for sublist in results_by_rank.values() for item in sublist]
 
     else:
         results_list = run(0, world_size=1, args=args)  # debug
 
-    print(results_list)
+    # print(results_list)
 
     df = pd.read_csv(args.csv_path)
     # add a new column to the dataframe

@@ -44,7 +44,7 @@ def pllava_answer(
     processor,
     video_list,
     do_sample=True,
-    max_new_tokens=200,
+    max_new_tokens=400,
     num_beams=1,
     min_length=1,
     top_p=0.9,
