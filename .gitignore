@@ -3,4 +3,4 @@ LLM
 samples
 log
 temp*
-huggingface_download
+huggingface_download/
