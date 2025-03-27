@@ -9,8 +9,8 @@ from tqdm import tqdm
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
 # ====== 配置路径 ======
-csv_path = "./panda_10k_interaction_score.csv"  # 直接修改原 CSV
-output_folder = "results"
+csv_path = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/internvid_00.csv"  # 直接修改原 CSV
+output_folder = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/data"
 os.makedirs(output_folder, exist_ok=True)
 
 # 读取 CSV
@@ -62,13 +62,13 @@ def process_video(idx, video_path, gpu_id):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     # 设置检测间隔，确保长视频检测帧数多
-    step_size = max(1, total_frames // 30)
+    step_size = min(max(1, total_frames // 10), 30)
     frame_idx = 0
     detected_persons = set()
     bbox_overlap = 0  # 记录是否有重叠的边界框
 
     # 加载 YOLOv8 模型到指定 GPU
-    model = YOLO("yolo11n.pt", verbose=False)
+    model = YOLO("yolo11m.pt", verbose=False)
     model.to(f"cuda:{gpu_id}")  # 绑定到指定 GPU
 
     while cap.isOpened():

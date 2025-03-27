@@ -2,8 +2,8 @@ import json
 import csv
 
 # 文件路径
-jsonl_file = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/Datasets/intervid/internvid.aes18m.vc2vicuna.jsonl"
-csv_file = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/Datasets/intervid/internvid.csv"
+jsonl_file = "/mnt/spaceai-internal/panda-intervid/disk1/internvid.aes18m.vc2vicuna.jsonl"
+csv_file = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/internvid.csv"
 
 # 读取 JSONL 并写入 CSV
 with open(jsonl_file, "r", encoding="utf-8") as infile, open(csv_file, "w", newline="", encoding="utf-8") as outfile:

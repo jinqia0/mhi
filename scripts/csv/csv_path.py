@@ -1,12 +1,13 @@
 import pandas as pd
 
-# 读取 CSV 文件
-csv_file = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/data/internvid/internvid_00_1k.csv"  # 你的 CSV 文件
-df = pd.read_csv(csv_file)
+# 读取CSV文件
+df = pd.read_csv("/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/internvid.csv")
 
-# 替换路径，使其变为相对路径
-df["path"] = 'Datasets/videos' + df["path"]
-# 直接覆盖原文件
-df.to_csv(csv_file, index=False)
+# 生成path列
+df['path'] = df['YoutubeID'] + '-' + df['Start_timestamp'] + '-' + df['End_timestamp'] + '.mp4'
 
-print(f"路径已更新，文件已覆盖：{csv_file}")
+# 选择需要的列并重命名
+new_df = df[['path', 'Caption', 'Aesthetic_Score']]
+
+# 保存新的CSV文件
+new_df.to_csv("/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/internvid.csv", index=False)
