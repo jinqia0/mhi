@@ -7,134 +7,170 @@ from ultralytics import YOLO
 from tqdm import tqdm
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+torch.backends.cudnn.benchmark = True  # 启用cuDNN优化
 
-# ====== 配置路径 ======
-csv_path = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/internvid_00.csv"  # 直接修改原 CSV
-output_folder = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/data"
-os.makedirs(output_folder, exist_ok=True)
+# ====== 配置参数 ======
+BATCH_SIZE = 8               # 根据显存调整（建议RTX3090设为4，A100设为8）
+CONF_THRESH = 0.6            # 提高置信度阈值减少检测量
+IOU_THRESH = 0.45            # 调整IoU阈值
+POOL_SIZE_PER_GPU = 2        # 每个GPU的进程数（根据CPU核心数调整）
 
-# 读取 CSV
+# ====== 路径配置 ======
+csv_path = "/home/jinqiao/Projects/mhi/data/panda/panda_1k.csv"
+
+# ====== 初始化数据 ======
 df = pd.read_csv(csv_path)
+video_paths = ['/home/jinqiao/Projects/mhi/Datasets/Panda/nvme/tmp/heyinan/panda/' + path for path in df["path"].tolist()]
 
-# 初始化新列
-if "has_person" not in df.columns:
-    df["has_person"] = 0
-if "num_persons" not in df.columns:
-    df["num_persons"] = 0
-if "bbox_overlap" not in df.columns:
-    df["bbox_overlap"] = 0  # 新增列，标记边界框是否重叠
+# 初始化结果列
+for col in ["has_person", "num_persons", "bbox_overlap"]:
+    if col not in df.columns:
+        df[col] = 0
 
-# 获取所有可用 GPU
-num_gpus = torch.cuda.device_count()
-gpu_ids = list(range(num_gpus))  # 例如 [0, 1, 2, 3]
-
-# 分配任务
-video_paths = df["path"].tolist()
-num_videos = len(video_paths)
-
-# 设定全局变量，方便多进程修改 CSV
-csv_lock = mp.Lock()
-
+# ====== 多GPU处理核心 ======
 def calculate_iou(box1, box2):
-    """ 计算两个边界框的 IoU """
-    x1, y1, x2, y2 = box1
-    x1g, y1g, x2g, y2g = box2
+    """支持三维张量的IoU计算（正确处理广播维度）"""
+    # 确保内存连续性并保持维度
+    box1 = box1.contiguous().view(-1,4)  # 转换为(N*M,4)
+    box2 = box2.contiguous().view(-1,4)
+    
+    # 维度验证
+    assert box1.shape == box2.shape, f"Box shapes mismatch: {box1.shape} vs {box2.shape}"
+    
+    # 计算交集坐标
+    inter_x1 = torch.max(box1[:,0], box2[:,0])
+    inter_y1 = torch.max(box1[:,1], box2[:,1])
+    inter_x2 = torch.min(box1[:,2], box2[:,2])
+    inter_y2 = torch.min(box1[:,3], box2[:,3])
+    
+    # 计算面积
+    inter_area = (inter_x2 - inter_x1).clamp(min=0) * (inter_y2 - inter_y1).clamp(min=0)
+    area1 = (box1[:,2] - box1[:,0]) * (box1[:,3] - box1[:,1])
+    area2 = (box2[:,2] - box2[:,0]) * (box2[:,3] - box2[:,1])
+    
+    # 恢复原始矩阵形状
+    iou = inter_area / (area1 + area2 - inter_area + 1e-6)
+    return iou.view(box1.size(0)//box2.size(0), box2.size(0))  # 恢复为(N,M)形状
 
-    inter_x1 = max(x1, x1g)
-    inter_y1 = max(y1, y1g)
-    inter_x2 = min(x2, x2g)
-    inter_y2 = min(y2, y2g)
-
-    inter_area = max(0, inter_x2 - inter_x1) * max(0, inter_y2 - inter_y1)
-    box1_area = (x2 - x1) * (y2 - y1)
-    box2_area = (x2g - x1g) * (y2g - y1g)
-
-    union_area = box1_area + box2_area - inter_area
-    iou = inter_area / union_area if union_area > 0 else 0
-    return iou
-
-def process_video(idx, video_path, gpu_id):
-    """ 在指定 GPU 上运行 YOLO 进行人体检测，并计算边界框重叠 """
+def process_video(idx, video_path, model, device):
+    """ 优化后的视频处理（支持批量推理） """
     if not os.path.exists(video_path):
-        return idx, 0, 0, 0  # 文件不存在，返回 0
+        return idx, 0, 0, 0
 
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    step_size = max(1, total_frames // 30)
+    
+    frame_buffer = []
+    max_persons = 0
+    overlap_flag = 0
+    detected = False
 
-    # 设置检测间隔，确保长视频检测帧数多
-    step_size = min(max(1, total_frames // 10), 30)
-    frame_idx = 0
-    detected_persons = set()
-    bbox_overlap = 0  # 记录是否有重叠的边界框
+    with torch.cuda.device(device):  # 显式指定设备上下文
+        with torch.no_grad():        # 禁用梯度计算
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret: break
 
-    # 加载 YOLOv8 模型到指定 GPU
-    model = YOLO("yolo11m.pt", verbose=False)
-    model.to(f"cuda:{gpu_id}")  # 绑定到指定 GPU
+                # 动态帧采样策略
+                if (cap.get(cv2.CAP_PROP_POS_FRAMES) % step_size) == 0:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_buffer.append(frame)
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+                    # 批量推理（达到批次大小或视频结束）
+                    if len(frame_buffer) == BATCH_SIZE or not ret:
+                        with torch.inference_mode():
+                            results = model(frame_buffer, 
+                                         conf=CONF_THRESH, 
+                                         iou=IOU_THRESH, 
+                                         verbose=False)
 
-        # 仅检测首帧 & 每 step_size 帧
-        if frame_idx == 0 or frame_idx % step_size == 0:
-            results = model.predict(frame, verbose=False, device=f"cuda:{gpu_id}")
-            
-            person_bboxes = []
-            person_count = 0
+                        for res in results:
+                            # 同步张量到CPU并转换类型
+                            boxes = res.boxes.xyxy.float()
+                            cls_ids = res.boxes.cls
+                            
+                            # 筛选人体检测
+                            person_mask = (cls_ids == 0)
+                            person_boxes = boxes[person_mask]
+                            person_count = person_mask.sum().item()
 
-            for box in results[0].boxes:
-                if int(box.cls[0].item()) == 0:  # YOLO 类别 0 代表人体
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()  # 获取边界框
-                    person_bboxes.append((x1, y1, x2, y2))
-                    person_count += 1
+                            # 关键修复：更新最大人数统计
+                            if person_count > 0:
+                                detected = True
+                                max_persons = max(max_persons, person_count)
 
-            if person_count > 0:
-                detected_persons.add(person_count)
+                            # 批量计算IoU（使用矩阵运算）
+                            if person_boxes.shape[0] >= 2:
+                                n = person_boxes.shape[0]
+                                iou_matrix = calculate_iou(
+                                    person_boxes.unsqueeze(1),
+                                    person_boxes.unsqueeze(0)
+                                )
+                                overlap_flag = max(overlap_flag, (iou_matrix > 0).any().item())
 
-            # 计算边界框重叠情况
-            for i in range(len(person_bboxes)):
-                for j in range(i + 1, len(person_bboxes)):
-                    if calculate_iou(person_bboxes[i], person_bboxes[j]) > 0:
-                        bbox_overlap = 1
-                        break
-                if bbox_overlap:
-                    break
-
-        frame_idx += 1
+                        frame_buffer.clear()
 
     cap.release()
+    return idx, int(detected), max_persons, overlap_flag
 
-    total_persons = max(detected_persons) if detected_persons else 0
-    return idx, 1 if total_persons > 0 else 0, total_persons, bbox_overlap  # 返回检测结果
-
-
-def worker(task):
-    """ 处理单个视频，分配 GPU """
-    idx, video_path = task
-    gpu_id = gpu_ids[idx % num_gpus]  # 轮流分配 GPU
-    return process_video(idx, video_path, gpu_id)
-
-
-if __name__ == "__main__":
-    torch.cuda.empty_cache()
+def gpu_worker(gpu_id, task_queue, result_queue):
+    """ GPU绑定的长期工作进程 """
+    torch.cuda.set_device(gpu_id)
+    model = YOLO("yolo11m.pt", verbose=False)  # 修复模型版本
+    model.to(f"cuda:{gpu_id}")
+    model.model.eval()  # 设置为评估模式
     
-    # 多进程池，使用所有 GPU 进行并行推理
-    pool = mp.Pool(processes=num_gpus)  # 进程数设为 GPU 数量，提高吞吐量
+    # 优化显存配置
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    
+    while True:
+        task = task_queue.get()
+        if task is None: break  # 终止信号
+        result = process_video(*task, model=model, device=gpu_id)
+        result_queue.put(result)
+        del result
+        torch.cuda.empty_cache()
+    
+if __name__ == "__main__":
+    # ====== 初始化并行环境 ======
+    mp.set_start_method('spawn')
+    num_gpus = torch.cuda.device_count()
+    
+    # ====== 创建任务队列 ======
+    task_queue = mp.Queue()
+    result_queue = mp.Queue()
+    
+    # ====== 启动GPU工作进程 ======
+    for gpu_id in range(num_gpus):
+        for _ in range(POOL_SIZE_PER_GPU):  # 每个GPU启动多个进程
+            mp.Process(target=gpu_worker, args=(gpu_id, task_queue, result_queue)).start()
 
-    # 并行处理视频
-    results = list(tqdm(pool.imap(worker, enumerate(video_paths)), total=num_videos, desc="Processing Videos"))
+    # ====== 填充任务队列 ======
+    for idx, path in enumerate(video_paths):
+        task_queue.put((idx, path))
 
-    # 关闭进程池
-    pool.close()
-    pool.join()
+    # ====== 添加终止信号 ======
+    for _ in range(num_gpus * POOL_SIZE_PER_GPU):
+        task_queue.put(None)
 
-    # 更新 CSV 文件
-    for idx, has_person, num_persons, bbox_overlap in results:
+    # ====== 结果收集 ====== 
+    pbar = tqdm(total=len(video_paths), desc="Processing")
+    completed = 0
+    count = 0
+    while completed < len(video_paths):
+        idx, has_person, num_persons, bbox_overlap = result_queue.get()
         df.at[idx, "has_person"] = has_person
         df.at[idx, "num_persons"] = num_persons
-        df.at[idx, "bbox_overlap"] = bbox_overlap  # 更新重叠信息
-
-    # 保存修改后的 CSV
+        df.at[idx, "bbox_overlap"] = int(bbox_overlap)
+        completed += 1
+        pbar.update(1)
+        pbar.set_postfix_str(f"GPU Utilization: {torch.cuda.utilization()}%")
+        if (num_persons >= 2):
+            count += 1
+    
+    # ====== 保存结果 ======
     df.to_csv(csv_path, index=False)
-    print(f"检测完成，原 CSV 文件已更新: {csv_path}")
+    print(count / len(video_paths))
+    print(f"处理完成，更新文件: {csv_path}")
