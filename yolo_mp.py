@@ -16,7 +16,7 @@ IOU_THRESH = 0.45            # 调整IoU阈值
 POOL_SIZE_PER_GPU = 2        # 每个GPU的进程数（根据CPU核心数调整）
 
 # ====== 路径配置 ======
-csv_path = "/home/jinqiao/Projects/mhi/data/panda/panda_1k.csv"
+csv_path = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/mhi.csv"
 
 # ====== 初始化数据 ======
 df = pd.read_csv(csv_path)

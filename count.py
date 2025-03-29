@@ -32,6 +32,6 @@ def count_num_persons_distribution(csv_path):
     return distribution
 
 # 使用示例
-result = count_num_persons_distribution("/home/jinqiao/Projects/mhi/data/panda/panda_1k.csv")
+result = count_num_persons_distribution("/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/mhi.csv")
 for k, v in result.items():
     print(f"{k}人: {v}%")
