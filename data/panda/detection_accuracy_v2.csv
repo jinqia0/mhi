@@ -1,3 +1,0 @@
-standard,precision,miss_rate,true_positives,false_negatives,total_true_multi
-num_persons ≥ 2,0.9416,0.782,1450,5202,6652
-bbox_overlap = 1,0.8623,0.7478,1328,3937,5265

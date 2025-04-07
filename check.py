@@ -1,5 +1,6 @@
 import os
 import csv
+from tqdm import tqdm
 
 def validate_videos_in_csv(csv_file, video_column="path"):
     """
@@ -14,7 +15,7 @@ def validate_videos_in_csv(csv_file, video_column="path"):
         return
 
     unreadable_videos = []
-
+    
     with open(csv_file, mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         
@@ -22,7 +23,13 @@ def validate_videos_in_csv(csv_file, video_column="path"):
             print(f"❌ 错误：CSV 文件没有 '{video_column}' 列！")
             return
 
-        for row in reader:
+        # 获取总行数用于进度条
+        total_rows = sum(1 for _ in reader)
+        file.seek(0)  # 重置文件指针
+        next(reader)  # 跳过标题行
+
+        # 使用tqdm创建进度条
+        for row in tqdm(reader, total=total_rows, desc="验证视频文件"):
             video_path = row[video_column].strip()  # 去除首尾空格
             
             if not video_path:  # 跳过空路径
@@ -43,5 +50,5 @@ def validate_videos_in_csv(csv_file, video_column="path"):
 
 # 示例调用
 if __name__ == "__main__":
-    csv_file = "videos.csv"  # 替换为你的 CSV 文件路径
+    csv_file = "Datasets/internvid_rename_abspath.csv"  # 替换为你的 CSV 文件路径
     validate_videos_in_csv(csv_file)

@@ -1,18 +1,16 @@
-import pandas as pd
 import re
+import pandas as pd
 from tqdm import tqdm
 
-def classify_panda_directory(path):
-    """根据路径中的编号重新分类panda目录范围"""
-    # 使用正则表达式提取编号
-    match = re.search(r'/panda/(\d{3})/', path)
+def update_path(original_path):
+    # 正则匹配出数字部分（如 079）
+    match = re.search(r'/panda/(\d+)', original_path)
     if not match:
-        return path  # 如果没有匹配到编号，返回原路径
+        return original_path  # 如果没有匹配到，返回原路径
     
-    number = int(match.group(1))
-    # print(number)
-    
-    # 确定新的范围目录
+    number = int(match.group(1))  # 转换为整数
+
+    # 根据规则确定 new_range
     if 0 <= number <= 137:
         new_range = "panda-000-137"
     elif 138 <= number <= 273:
@@ -22,28 +20,31 @@ def classify_panda_directory(path):
     elif 409 <= number <= 440:
         new_range = "panda-409-440"
     else:
-        return path  # 如果编号不在任何范围内，返回原路径
-    
-    # 替换路径中的范围部分
-    part = path.split('/')[6]
-    
-    return path.replace(part, new_range)
+        return original_path  # 如果超出范围，返回原路径
 
-# 示例使用
+    # 替换路径中的部分
+    updated_path = re.sub(
+        r'/panda\d+-\d+/',  # 匹配类似 panda076-125 的部分
+        f'/{new_range}/',    # 替换为新的 range
+        original_path
+    )
+    
+    # 进一步调整路径结构（添加 /mnt/spaceai-internal/panda-intervid/untar_data/disk2/）
+    final_path = f"/mnt/spaceai-internal/panda-intervid/untar_data/disk2{updated_path.split('panda-30m')[1]}"
+    return final_path
+
+
 if __name__ == "__main__":
+    # 测试代码
+    # original_path = "/workspace/public/datasets/panda-30m/panda076-125/nvme/tmp/heyinan/panda/079/JUWYUZbdRXk-0:04:19.158-0:04:30.570.mp4"
+    # updated_path = update_path(original_path)
+    # print(updated_path)
+
+    csv_path = "Datasets/panda_all_text_aes.csv"
+    df = pd.read_csv(csv_path)
     
-    # # 示例路径
-    # example_path = "/mnt/spaceai-internal/panda-intervid/untar_data/disk2/panda076-125/nvme/tmp/heyinan/panda/079/JUWYUZbdRXk-0:04:19.158-0:04:30.570.mp4"
-    # new_path = classify_panda_directory(example_path)
-    # print(f"原路径: {example_path}")
-    # print(f"新路径: {new_path}")
-    
-    # 实际应用中，你可以这样处理整个DataFrame
-    # 假设df是你的DataFrame，包含'path'列
-    df = pd.read_csv('/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/mhi.csv')
-    tqdm.pandas(desc="Processing")
-    df['path'] = df['path'].apply(classify_panda_directory)
-    
-    df.to_csv('/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/mhi.csv', index=False)
-    print("处理完成，结果已保存到 /mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/mhi.csv")
-    
+    tqdm.pandas()
+    df['path'] = df['path'].progress_apply(update_path)
+        
+    df.to_csv(csv_path, index=False)
+    print(f"CSV 文件处理完成，已保存为 {csv_path}.")

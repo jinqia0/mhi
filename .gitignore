@@ -6,3 +6,5 @@ temp*
 huggingface_download/
 checkpoints
 MotionLLM/litgpt
+weights
+log

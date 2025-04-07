@@ -1,13 +1,13 @@
 #!/bin/bash
 
-cd "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/"
+cd "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/"
 
 # 设置变量
 SOURCE_DIR="/mnt/spaceai-internal/panda-intervid/disk1/internvid"  # 原始 tar 文件存放目录
-TEMP_DIR="/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/temp_extract"  # 临时解压目录
+TEMP_DIR="/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/temp_extract"  # 临时解压目录
 BOS_TARGET_DIR="bos://spaceai-internal/panda-intervid/internvid"  # 目标 BOS 存储路径
 TOKEN="58477ba3d08178bca9faf332867db5fc"  # 认证 Token
-LOG_DIR="/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/logs"  # 日志文件存放目录
+LOG_DIR="/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/logs"  # 日志文件存放目录
 UPLOADED_FILES_LOG="$LOG_DIR/uploaded_files.log"  # 记录已上传文件的日志
 
 # 创建临时目录和日志文件
