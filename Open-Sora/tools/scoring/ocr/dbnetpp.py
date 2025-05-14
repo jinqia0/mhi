@@ -40,9 +40,7 @@ model = dict(
     ),
     init_cfg=dict(
         type="Pretrained",
-        checkpoint="https://download.openmmlab.com/mmocr/textdet/dbnetpp/"
-        "dbnetpp_resnet50-oclip_fpnc_1200e_icdar2015/"
-        "dbnetpp_resnet50-oclip_fpnc_1200e_icdar2015_20221101_124139-4ecb39ac.pth",
+        checkpoint="/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/weights/ocr/dbnetpp_resnet50-oclip_fpnc_1200e_icdar2015_20221101_124139-4ecb39ac.pth",
     ),
 )
 
@@ -63,3 +61,5 @@ visualizer = dict(
     name="visualizer",
     vis_backends=vis_backends,
 )
+
+log_level = 'WARNING'

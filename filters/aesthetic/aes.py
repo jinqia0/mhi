@@ -15,8 +15,8 @@ BATCH_SIZE = 8               # 视频帧批处理大小
 SAMPLE_RATE = 10             # 帧采样率
 
 # ====== 路径配置 ======
-csv_path = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/Datasets/panda_10k.csv"
-model_path = "/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/weights/aes/sac+logos+ava1-l14-linearMSE.pth"
+csv_path = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/Datasets/csv_1M/panda_all_text_aes_part_22.csv"
+model_path = "/mnt/pfs-mc0p4k/cvg/team/jinqiao/mhi/weights/aes/sac+logos+ava1-l14-linearMSE.pth"
 
 class MLP(nn.Module):
     def __init__(self, input_size):
@@ -40,7 +40,7 @@ def normalized(a, axis=-1, order=2):
     l2[l2 == 0] = 1
     return a / np.expand_dims(l2, axis)
 
-def process_video(idx, video_path, model, clip_preprocess, device):
+def process_video(idx, video_path, aes_model, clip_model, clip_preprocess, device):
     """优化后的视频处理函数（支持批量推理）"""
     if not os.path.exists(video_path):
         return idx, 0.0  # 返回默认值
@@ -67,20 +67,20 @@ def process_video(idx, video_path, model, clip_preprocess, device):
                     batch = torch.stack([clip_preprocess(img) for img in frame_buffer]).to(device)
                     
                     # 特征提取
-                    image_features = model.encode_image(batch)
+                    image_features = clip_model.encode_image(batch)
                     im_emb_arr = normalized(image_features.cpu().numpy())
                     
                     # 推理
-                    predictions = model.aes_model(torch.from_numpy(im_emb_arr).to(device).float())
+                    predictions = aes_model(torch.from_numpy(im_emb_arr).to(device).float())
                     scores.extend(predictions.cpu().tolist())
                     frame_buffer.clear()
         
         # 处理剩余帧
         if len(frame_buffer) > 0:
             batch = torch.stack([clip_preprocess(img) for img in frame_buffer]).to(device)
-            image_features = model.encode_image(batch)
+            image_features = clip_model.encode_image(batch)
             im_emb_arr = normalized(image_features.cpu().numpy())
-            predictions = model.aes_model(torch.from_numpy(im_emb_arr).to(device).float())
+            predictions = aes_model(torch.from_numpy(im_emb_arr).to(device).float())
             scores.extend(predictions.cpu().tolist())
     
     cap.release()
@@ -89,28 +89,34 @@ def process_video(idx, video_path, model, clip_preprocess, device):
 class GPUWorker:
     def __init__(self, gpu_id, clip_model_name="ViT-L/14"):
         self.gpu_id = gpu_id
-        self.clip_model_name = clip_model_name
         self.device = torch.device(f"cuda:{gpu_id}")
         
-        # 初始化模型
+        # 初始化模型（保持原始CLIP模型结构）
         self.clip_model, self.clip_preprocess = clip.load(clip_model_name, device=self.device)
         self.aes_model = MLP(768).to(self.device)
         self.aes_model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.aes_model.eval()
         
-        # 合并模型以简化参数传递
-        self.model = nn.ModuleDict({
+        # 添加模型引用（不要使用ModuleDict）
+        self.models = {
             'clip': self.clip_model,
-            'aes_model': self.aes_model
-        }).eval()
+            'aes': self.aes_model
+        }
 
     def __call__(self, task_queue, result_queue):
         while True:
             task = task_queue.get()
-            if task is None: break  # 终止信号
+            if task is None: break
             
             idx, video_path = task
-            result = process_video(idx, video_path, self.model, self.clip_preprocess, self.device)
+            result = process_video(
+                idx, 
+                video_path, 
+                clip_model=self.models['clip'],  # 显式传递CLIP模型
+                aes_model=self.models['aes'],    # 显式传递AES模型
+                clip_preprocess=self.clip_preprocess,
+                device=self.device
+            )
             result_queue.put(result)
             torch.cuda.empty_cache()
 

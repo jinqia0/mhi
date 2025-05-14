@@ -1,11 +1,8 @@
 #!/bin/bash
 
-ls /mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/lizrun/yolo/yolo.sh
-ls /mnt/spaceai-internal/panda-intervid/disk1/internvid.aes18m.vc2vicuna.jsonl
-ls /mnt/spaceai-internal/
-ls /mnt/spaceai-internal/panda-intervid/
+CUDA_VISIBLE_DEVICES=0,1,2,3
 
-ls /mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/internvid_66
-ls /mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/internvid_66/ZpUYjpKg9KY-00:02:26.021-00:02:26.730.mp4
+cd /mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi
 
-echo "Done"
+echo "Start Running YOLO Inference"
+/mnt/pfs-gv8sxa/tts/dhg/jinqiao/envs/mhi/bin/python /mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/filters/yolo/yolo_mp.py >> logs/yolo_lizrun_61.log

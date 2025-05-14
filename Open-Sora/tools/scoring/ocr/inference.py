@@ -1,6 +1,10 @@
 import argparse
 import os
-
+import sys
+project_root = "/home/jinqiao/Projects/mhi/Open-Sora"
+sys.path.insert(0, project_root)
+datasets_dir = os.path.join(project_root, "opensora/datasets")
+sys.path.append(datasets_dir)
 import colossalai
 import numpy as np
 import pandas as pd
@@ -115,21 +119,20 @@ def main():
     # build dataset
     transform = Compose(cfg.test_pipeline)
     dataset = VideoTextDataset(meta_path=meta_path, transform=transform)
+    sampler = DistributedSampler(
+        dataset,
+        num_replicas=dist.get_world_size(),
+        rank=dist.get_rank(),
+        shuffle=False,
+        drop_last=False,
+    )
     dataloader = DataLoader(
         dataset,
         batch_size=args.bs,
         num_workers=args.num_workers,
-        sampler=DistributedSampler(
-            dataset,
-            num_replicas=dist.get_world_size(),
-            rank=dist.get_rank(),
-            shuffle=False,
-            drop_last=False,
-        ),
+        sampler=sampler,
         collate_fn=default_collate,
     )
-    print("==> Dataloader built.")
-
     # compute scores
     dataset.meta["ocr"] = np.nan
     indices_list = []

@@ -219,17 +219,11 @@ def main():
         ret = meta.parallel_apply(process_single_row_partial, axis=1)
     else:
         ret = meta.progress_apply(process_single_row_partial, axis=1)
-    meta0 = meta[ret]
-    meta1 = meta[~ret]
-
-    out_path = meta_path.replace(".csv", "_filter-zoom.csv")
-    meta0.to_csv(out_path, index=False)
-    print(f"New meta (shape={meta0.shape}) saved to '{out_path}'")
+    meta['zoom'] = ret
 
     out_path = meta_path.replace(".csv", "_zoom.csv")
-    meta1.to_csv(out_path, index=False)
-    print(f"New meta (shape={meta1.shape}) saved to '{out_path}'")
-
+    meta.to_csv(out_path, index=False)
+    print(f"New meta saved to '{out_path}'")
 
 if __name__ == "__main__":
     main()

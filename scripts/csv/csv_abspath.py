@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 
 # 配置
-csv_path = 'Datasets/internvid_rename_col.csv'
+csv_path = '/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/Datasets/internvid_00-15.csv'
 base_dir = '/mnt/spaceai-internal/panda-intervid/internvid/nvme/tmp/heyinan/panda'
 output_csv = 'Datasets/internvid_rename_abspath.csv'
 num_workers = 16  # 根据CPU核心数调整

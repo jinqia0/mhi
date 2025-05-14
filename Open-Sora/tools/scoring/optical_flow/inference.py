@@ -153,7 +153,7 @@ def main():
         exit()
 
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True
     dist.init_process_group(backend="nccl", timeout=timedelta(hours=24))
     torch.cuda.set_device(dist.get_rank() % torch.cuda.device_count())
 
@@ -169,7 +169,7 @@ def main():
         reg_refine=True,
         task="flow",
     )
-    ckpt = torch.load("./pretrained_models/unimatch/gmflow-scale2-regrefine6-mixdata-train320x576-4e7b215d.pth")
+    ckpt = torch.load("/mnt/pfs-gv8sxa/tts/dhg/jinqiao/mhi/weights/unimatch/gmflow-scale2-regrefine6-mixdata-train320x576-4e7b215d.pth")
     model.load_state_dict(ckpt["model"])
     model = model.to(device)
 
@@ -189,7 +189,7 @@ def main():
             drop_last=False,
         ),
     )
-
+    
     # compute optical flow scores
     indices_list = []
     scores_list = []

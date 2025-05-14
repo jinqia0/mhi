@@ -7,4 +7,10 @@ huggingface_download/
 checkpoints
 MotionLLM/litgpt
 weights
-log
+logs
+Data
+hfd
+.vscode
+*.tar
+*.zip
+*.tar.gz
