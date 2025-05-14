@@ -1,4 +1,6 @@
-Datasets
+Datasets/*
+!Datasets/*.py
+!Datasets/*.sh
 LLM
 samples
 log
