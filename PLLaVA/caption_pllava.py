@@ -26,7 +26,12 @@ from tqdm import tqdm
 from transformers.feature_extraction_utils import BatchFeature
 
 conv_template = Conversation(
-    system="Please describe the content of this video in as much detail as possible. Please describe the content of the video and the changes that occur, in chronological order. The description should be useful for AI to re-generate the video. The description should not be less than six sentences. Here is one example of good descriptions: 1. There is only one person in the video, a young girl of yellow race. She is wearing a black sling and has brown curly hair that falls on her shoulders and back. She has a fair figure, big eyes, delicate skin, deep and bright eyes, and blood-red lips. She looks sexy and has delicate makeup. Her expression is calm at first, but then she smiles seductively at the camera. The background is the blurred outline of city buildings and windows, through which you can see the scenery outside.",
+    system="Please describe the content of this video in as much detail as possible. Please describe the content of the video and the changes that occur, in chronological order. \
+The description should be useful for AI to re-generate the video. The description should not be less than six sentences. Here is one example of good descriptions: \
+1. There is only one person in the video, a young girl of yellow race. She is wearing a black sling and has brown curly hair that falls on her shoulders and back. \
+She has a fair figure, big eyes, delicate skin, deep and bright eyes, and blood-red lips. She looks sexy and has delicate makeup. \
+Her expression is calm at first, but then she smiles seductively at the camera. \
+The background is the blurred outline of city buildings and windows, through which you can see the scenery outside.",
     roles=("USER:", "ASSISTANT:"),
     messages=[],
     sep=(" ", "</s>"),
@@ -44,20 +49,20 @@ torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def pllava_answer(
-    conv: Conversation,
-    model,
-    processor,
-    video_list,
-    do_sample=True,
-    max_new_tokens=500,
-    num_beams=1,
-    min_length=1,
-    top_p=0.9,
-    repetition_penalty=1.0,
-    length_penalty=1,
-    temperature=1.0,
-    print_res=False,
-):
+        conv: Conversation,
+        model,
+        processor,
+        video_list,
+        do_sample=True,
+        max_new_tokens=500,
+        num_beams=1,
+        min_length=1,
+        top_p=0.9,
+        repetition_penalty=1.0,
+        length_penalty=1,
+        temperature=1.0,
+        print_res=False
+    ):
     prompt = conv.get_prompt()
     inputs_list = [processor(text=prompt, images=video, return_tensors="pt") for video in video_list]
     inputs_batched = dict()  # add batch dimension by cat
@@ -73,7 +78,6 @@ def pllava_answer(
             max_new_tokens=max_new_tokens,
             num_beams=num_beams,
             min_length=min_length,
-            top_p=top_p,
             repetition_penalty=repetition_penalty,
             length_penalty=length_penalty,
             temperature=temperature,
@@ -179,6 +183,12 @@ def parse_args():
         required=True,
         default=4,
     )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        required=False,
+        default=4,
+    )
     parser.add_argument("--use_lora", action="store_true")
     parser.add_argument(
         "--lora_alpha",
@@ -202,7 +212,7 @@ def parse_args():
         "--pooling_shape",
         type=str,
         required=False,
-        default=None,
+        default="16-20-20",
     )
     parser.add_argument(
         "--error_message",
@@ -223,8 +233,7 @@ def load_model_and_dataset(
     lora_alpha,
     weight_dir,
     csv_path,
-    pooling_shape=(16, 12, 12),
-):
+    pooling_shape=(16, 12, 12)):
     # remind that, once the model goes larger (30B+) may cause the memory to be heavily used up. Even Tearing Nodes.
     model, processor = load_pllava(
         pretrained_model_name_or_path,
@@ -252,8 +261,7 @@ def infer(
     processor,
     video_list,
     conv_mode,
-    print_res=False,
-):
+    print_res=False):
     # check if any video in video_list is None, if so, raise an exception
     if any([video is None for video in video_list]):
         raise Exception("Video not loaded properly")
@@ -310,7 +318,7 @@ def run(rank, args, world_size, output_queue):
     logger.info("single test...")
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        num_workers=4,
+        num_workers=args.num_workers,
         batch_size=args.batch_size,
         collate_fn=collate_fn,
         shuffle=False,
@@ -318,7 +326,6 @@ def run(rank, args, world_size, output_queue):
 
     total = 0
     result_list = []
-    print(len(dataset))
     for batch in tqdm(dataloader):
         total += 1
         try:
@@ -349,9 +356,6 @@ def main():
         # Create a queue to collect results from each process
         output_queue = Queue()
 
-        # with Pool(world_size) as pool:
-        #     func = functools.partial(run, args=args, world_size=world_size)
-        #     result_lists = pool.map(func, range(world_size))
         processes = []
         for i in range(world_size):
             # Each process will now also take the output queue as an argument
@@ -371,11 +375,8 @@ def main():
             p.join()
 
         results_list = list(itertools.chain.from_iterable(results_by_rank[i] for i in range(world_size)))
-
     else:
         results_list = run(0, world_size=1, args=args)  # debug
-
-    # print(results_list)
 
     df = pd.read_csv(args.csv_path)
     # add a new column to the dataframe
