@@ -1,0 +1,13 @@
+pic
+--ROUyGMPHY-0:01:18.400-0:01:22.440.mp4
+-0a53i6qPjs-0:08:16.600-0:08:20.640.mp4
+-2Is252FCf0-0:02:34.454-0:02:41.427.mp4
+-4o5eS7V9dE-0:00:56.389-0:01:02.103.mp4
+-67dMcXTZ2o-0:10:34.258-0:10:39.597.mp4
+-65nRNFagR8-0:02:42.328-0:02:47.934.mp4
+-7BbN3cugBU-0:09:08.240-0:09:12.280.mp4
+
+crowd
+--55EC6w55o-0:02:14.868-0:02:20.540.mp4
+
+/home/jinqiao/miniconda3/envs/mhi/bin/python batch_video_pose_extraction_gpu.py --input-dir videos --output-dir pose_results --gpu-ids 0,1,2,3

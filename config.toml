@@ -1,0 +1,12 @@
+preset = "PMBTUS"
+theme = "classic"
+language = "zh"
+debug = false
+
+[preset_mapping]
+P = "project"
+M = "model"
+B = "branch"
+T = "tokens"
+U = "usage"
+S = "status"

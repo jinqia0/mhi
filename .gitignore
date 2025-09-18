@@ -1,0 +1,70 @@
+# =============================================================================
+# MHI项目 Git忽略配置
+# =============================================================================
+
+# 大批量视频数据目录 - 完全排除
+Dataset/
+videos/
+Datasets/*
+!Datasets/*.py
+!Datasets/*.sh
+Data/
+
+# 大型模型权重目录 - 完全排除
+checkpoints/
+weights/
+
+# 临时和缓存文件
+temp*
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 日志文件
+logs/
+log/
+*.log
+
+# Hugging Face下载缓存
+huggingface_download/
+hfd/
+
+# IDE和编辑器配置
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Python虚拟环境
+venv/
+env/
+.env
+
+# 大型语言模型相关
+LLM/
+MotionLLM/litgpt/
+
+# 样本和测试数据
+samples/
+enhancement_samples/
+!enhancement_samples/*.txt
+!enhancement_samples/*.csv
+
+# 大型CSV数据文件目录 - 完全排除
+csv/data/
+
+# 处理结果文件
+results/
+!results/*.json
+!results/*.py
+
+# 注意: 其他配置和小文件正常同步
