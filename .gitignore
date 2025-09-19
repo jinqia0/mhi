@@ -68,3 +68,6 @@ results/
 !results/*.py
 
 # 注意: 其他配置和小文件正常同步
+
+# 新增：Hugging Face数据集目录 - 完全排除
+huggingface_datasets/

@@ -52,8 +52,8 @@ shift
 TOOL="aria2c"
 THREADS=4
 CONCURRENT=5
-# HF_ENDPOINT=${HF_ENDPOINT:-"https://huggingface.co"}
-HF_ENDPOINT=${HF_ENDPOINT:-"https://hf-mirror.com"}
+HF_ENDPOINT=${HF_ENDPOINT:-"https://huggingface.co"}
+# HF_ENDPOINT=${HF_ENDPOINT:-"https://hf-mirror.com"}
 INCLUDE_PATTERNS=()
 EXCLUDE_PATTERNS=()
 REVISION="main"
