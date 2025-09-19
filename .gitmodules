@@ -1,3 +1,7 @@
 [submodule "third_party/MotionSight"]
 	path = third_party/MotionSight
 	url = https://github.com/NJU-PCALab/MotionSight.git
+[submodule "third_party/Open-Sora"]
+	path = third_party/Open-Sora
+	url = https://github.com/hpcaitech/Open-Sora.git
+	branch = opensora/v1.3
