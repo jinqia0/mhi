@@ -9,6 +9,8 @@ display_help() {
 Usage:
   hfd <REPO_ID> [--include include_pattern1 include_pattern2 ...] [--exclude exclude_pattern1 exclude_pattern2 ...] [--hf_username username] [--hf_token token] [--tool aria2c|wget] [-x threads] [-j jobs] [--dataset] [--local-dir path] [--revision rev]
 
+Note: For security reasons, avoid hardcoding hf_token in scripts. Use environment variables instead.
+
 Description:
   Downloads a model or dataset from Hugging Face using the provided repo ID.
 
@@ -51,7 +53,7 @@ TOOL="aria2c"
 THREADS=4
 CONCURRENT=5
 # HF_ENDPOINT=${HF_ENDPOINT:-"https://huggingface.co"}
-HF_ENDPOINT=${HF_ENDPOINT = "https://hf-mirror.com"}
+HF_ENDPOINT=${HF_ENDPOINT:-"https://hf-mirror.com"}
 INCLUDE_PATTERNS=()
 EXCLUDE_PATTERNS=()
 REVISION="main"
@@ -96,8 +98,8 @@ generate_command_string() {
     cmd_string+=" EXCLUDE_PATTERNS=${EXCLUDE_PATTERNS[*]}"
     cmd_string+=" DATASET=${DATASET:-0}"
     cmd_string+=" HF_USERNAME=${HF_USERNAME:-}"
-    cmd_string+=" HF_TOKEN=${HF_TOKEN:-}"
-    cmd_string+=" HF_TOKEN=${HF_ENDPOINT:-}"
+    # 注意：不在命令字符串中包含HF_TOKEN以避免敏感信息泄露
+    cmd_string+=" HF_ENDPOINT=${HF_ENDPOINT:-}"
     cmd_string+=" REVISION=$REVISION"
     echo "$cmd_string"
 }
