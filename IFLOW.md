@@ -94,6 +94,26 @@
 
 ## 环境准备
 
+### 使用项目自带的虚拟环境（推荐）
+
+视频标注应用使用项目自带的虚拟环境：
+
+```bash
+# 进入视频标注应用目录
+cd video_annotation_app
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 安装依赖（如果尚未安装）
+pip install -r ../requirements.txt
+
+# 为视频标注应用安装额外依赖
+pip install flask requests
+```
+
+### 或使用系统Python环境
+
 1. 安装依赖：
    ```bash
    pip install -r requirements.txt
@@ -106,7 +126,13 @@
 ## 运行视频标注工具
 
 ```bash
+# 使用Streamlit运行标注工具
 streamlit run core/video_annotator.py
+
+# 或运行新的Flask视频标注应用
+cd video_annotation_app
+source .venv/bin/activate
+python video_annotation_server.py
 ```
 
 ## 运行接触检测

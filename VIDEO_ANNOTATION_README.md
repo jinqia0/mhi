@@ -27,7 +27,7 @@ python3 video_annotation_server.py
 ```
 
 ## 访问地址
-启动后访问：http://localhost:5000
+启动后访问：http://localhost:5001
 
 ## 使用流程
 
@@ -82,7 +82,7 @@ python3 video_annotation_server.py
 ### 添加新视频
 可以通过API接口添加新的视频文件到标注列表：
 ```bash
-curl -X POST http://localhost:5000/api/add_video \
+curl -X POST http://localhost:5001/api/add_video \
   -H "Content-Type: application/json" \
   -d '{"video_path": "/path/to/video.mp4"}'
 ```
