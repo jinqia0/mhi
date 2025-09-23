@@ -61,6 +61,10 @@ enhancement_samples/
 
 # 大型CSV数据文件目录 - 完全排除
 csv/data/
+csv/internvid/
+csv/panda/
+csv/mhi/
+csv/test/
 
 # 处理结果文件
 results/
@@ -71,3 +75,6 @@ results/
 
 # 新增：Hugging Face数据集目录 - 完全排除
 huggingface_datasets/
+
+# 新增：pip安装包 - 完全排除
+*.whl
