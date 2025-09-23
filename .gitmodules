@@ -5,3 +5,6 @@
 	path = third_party/Open-Sora
 	url = https://github.com/hpcaitech/Open-Sora.git
 	branch = opensora/v1.3
+[submodule "third_party/Wan2.2"]
+	path = third_party/Wan2.2
+	url = https://github.com/Wan-Video/Wan2.2.git
