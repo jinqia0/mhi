@@ -16,3 +16,10 @@ hfd
 *.tar
 *.zip
 *.tar.gz
+
+file_scan_output/*.csv
+file_scan_output/scan
+
+scripts/*.txt
+scripts/*.log
+scripts/*.csv
